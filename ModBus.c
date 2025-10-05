@@ -7,30 +7,42 @@
 
 
 #define MODBUS_PORT 5502
-#define IN_BUF_LEN 100
-#define SERVER_ADDR 127.0.0.1
+#define IN_BUF_LEN 256
+#define SERVER_ADDR "127.0.0.1"
 
 
-/*
-struct sockaddr {
-    // Placeholder structure for sockaddr
-    int sa_family; // Address family
-    u_int16_t sin_port; // Port number
-    struct in_addr sin_addr; // Internet address
 
-};
-struct in_addr {
-    u_int32_t s_addr; // 32 bit adderess
-};
 
-void Write_multiple_registers() {
+int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
+
+    uint8_t Function_code = 0x10;
+    int length_of_apdu = 9 + 2 * numRegisters; // length of the apdu
+    uint8_t Apdu[length_of_apdu]; // apdu to be sent
+    uint8_t Apdu_R[5];
+    Apdu[0] = Function_code;
+    Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
+    Apdu[2] = startingRegister & 0xFF;        // starting address low byte
+    Apdu[3] = (numRegisters >> 8) & 0xFF;     // number of registers high byte
+    Apdu[4] = numRegisters & 0xFF;            // number of
+    
+    for (int i = 5; i < length_of_apdu; i++) {
+        uint8_t High_byte = (values[(i - 5) / 2] >> 8) & 0xFF; // high byte of the value
+        uint8_t Low_byte = values[(i - 5) / 2] & 0xFF;         // low byte of the value
+        if ((i - 5) % 2 == 0) {
+            Apdu[i] = High_byte;
+        } else {
+            Apdu[i] = Low_byte;
+        }
+    }
+    // TODO response form the server and understand what is going on with consistency of parameters
     // check consistency of parameters
     // assembles APDU
     
     // checks the response (apdu_R or error_code)
     // returns: number of writtend registers - ok <0 -error
-
+    return 0;
 }
+/*
 void Read_holding_registers() {
     // check consistency of parameters
     // assembles APDU
@@ -73,26 +85,50 @@ int bind (int sockfd, const struct sockaddr *my_addr, socklen_t addrlen) {
 int main() {
 
     u_int16_t bits_for_server_address = htons(MODBUS_PORT); // Convert to network byte order
+    
     int function_code = 3;  // Example function code
-    uint8_t byte_value = (uint8_t)function_code;  // Cast to
+    char server_ip[] = SERVER_ADDR; // Example server IP address
     uint8_t modbus_frame[256];
     int frame_length = sizeof(modbus_frame); // Example length of ModBus frame
+    int startingRegister = 0; // Starting register address
+    int numRegisters = 0; // Number of registers to read/write
+    int buffer[numRegisters]; // Buffer for register values
       // Function code goes at byte
-    printf("Hello, World!\n");
+    printf("Hello, you are going to connect to %s\n", server_ip);
     printf("ModBus TCP Server running on port %d\n", MODBUS_PORT);
-    printf("Server address in network byte order: 0x%X\n", bits_for_server_address);
-    printf("Function code as byte: 0x%X\n", byte_value);
-    printf("ModBus Frame Hex Dump:\n");
-    for(int i = 0; i < frame_length; i++) {
-        modbus_frame[i] = 0; // Fill with example data
-        modbus_frame[0] = function_code;
-        if(i % 8 == 0) printf("\n%04X: ", i);  // New line every 8 bytes
-        printf("%02X ", modbus_frame[i]);   
+    printf("You have 2 options:\n 1 - Read Holding Registers (Function code 3)\n 2 - Write Multiple Registers (Function code 16)\n");
+    printf("Input what kind of function you want to use (1-2): ");
+    scanf("%d", &function_code);
+    printf("Function code: %d\n", function_code);
+    switch(function_code) {
+        case 1:
+            printf("You chose to read holding registers (Function code 3)\n");
+            // Call the function to read holding registers
+            // Read_holding_registers();
+            break;
+        case 2:
+            printf("You chose to write multiple registers (Function code 16)\n");
+            printf("Input number of registers to write: ");
+            scanf("%d", &numRegisters);
+            for (int i = 0; i < numRegisters; i++) {
+                printf("Input value for register %d: ", i + startingRegister);
+                scanf("%d", &buffer[i]);
+            }
+            int result = Write_multiple_registers(server_ip, MODBUS_PORT, startingRegister, numRegisters, buffer);
+            if (result == numRegisters) {
+                printf("Successfully wrote %d registers starting from address %d\n", numRegisters, startingRegister);
+            }
+            if (result == 0) {
+                printf("You are stupid\n");
+            }
+            // Call the function to write multiple registers
+            // Write_multiple_registers();
+            break;
+        default:
+            printf("Invalid option. Please choose 1 or 2.\n");
+            return -1;
     }
-    printf("\n");
     
-    printf("modbus_frame[0]: 0x%02X\n", modbus_frame[0]);
-    printf("modbus_frame[1]: 0x%02X\n", modbus_frame[1]);
 
     return 0;
 }
