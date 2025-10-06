@@ -1,14 +1,27 @@
 #include <stdio.h>
 #include <sys/types.h>
-//#include <sys/socket.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/socket.h>
 
 
-#define MODBUS_PORT 502
+#define MODBUS_PORT 5502
 #define IN_BUF_LEN 256
-#define SERVER_ADDR "127.0.0.1"
+#define SERVER_ADDR "172.28.128.1"
+
+// Color codes for terminal output
+#define RESET       "\033[0m"
+#define RED         "\033[31m"
+#define GREEN       "\033[32m"
+#define YELLOW      "\033[33m"
+#define BLUE        "\033[34m"
+#define BOLD_RED    "\033[1;31m"
+#define BOLD_GREEN  "\033[1;32m"
+#define BOLD_YELLOW "\033[1;33m"
 
 
 int Send_Modbus_request(char *server_ip, int port, uint8_t *apdu, int apdu_len, uint8_t *apdu_response);
@@ -67,16 +80,56 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     // returns: number of writtend registers - ok <0 -error
     return 0;
 }
-/*
-void Read_holding_registers() {
+
+int Read_holding_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
     // check consistency of parameters
+    if (startingRegister < 0 || numRegisters <= 0 || values == NULL) {
+        return -1; // invalid parameters
+    }
+
     // assembles APDU
-    
+    uint8_t Function_code = 0x03;
+    int length_of_apdu = 5;
+    uint8_t Apdu[length_of_apdu];
+    uint8_t Apdu_R[5 + 2 * numRegisters];
+
+    Apdu[0] = Function_code;
+    Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
+    Apdu[2] = startingRegister & 0xFF;        // starting address low byte
+    Apdu[3] = (numRegisters >> 8) & 0xFF;     // number of registers high byte
+    Apdu[4] = numRegisters & 0xFF;            // number of registers low byte
+
+    int Result = Send_Modbus_request(server_ip, port, Apdu, length_of_apdu, Apdu_R);
+
+    if (Result < 0) {
+        return -2; // error in request
+    }
+
     // checks the response (apdu_R or error_code)
-    // returns: number of read registers - ok <0 -error
+    if (Apdu_R[0] == Function_code) {
+        if (Apdu_R[1] == Apdu[1] && Apdu_R[2] == Apdu[2]) {
+            if (Apdu_R[3] == Apdu[3] && Apdu_R[4] == Apdu[4]) {
+                // all good
+                for (int i = 0; i < numRegisters; i++) {
+                    values[i] = (Apdu_R[5 + 2 * i] << 8) | Apdu_R[6 + 2 * i];
+                }
+                return numRegisters; // number of registers read
+            } else {
+                // error in number of registers
+                return -3; // error in number of registers
+            }
+        } else {
+            // error in starting address
+            return -2; // error in starting address
+        }
+    } else {
+        // error in function code
+        return -1; // error in function code
+    }
+    return 0;
 
 }
-*/
+
 
 int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
 
@@ -117,11 +170,11 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 	socket_desc = socket(PF_INET , SOCK_STREAM , IPPROTO_TCP);
 	if (socket_desc == -1)
 	{
-		printf("Socket creation failed...\n");
+		printf(BOLD_RED "Socket creation failed...\n" RESET);
 		return -1;
 	}
 	else
-		printf("Socket successfully created...\n");
+		printf(BOLD_GREEN "Socket successfully created...\n" RESET);
 
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = inet_addr(server_ip);  // Use parameter instead of SERVER_ADDR
@@ -131,52 +184,44 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 	
 	if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
 	{
-		printf("Connection with the server failed...\n"); 
-        printf("Make sure that the server is running and reachable at address (%s) port (%d)\n", server_ip, port);
+		printf(BOLD_RED "Connection with the server failed: %s\n" RESET, strerror(errno)); 
+        printf("Make sure that the server is running and reachable at address ("BLUE "%s" RESET ") port ("BLUE "%d" RESET ")\n", server_ip, port);
 
         for (int i = 0; i < length_of_frame; i++) {
-            printf("0x%02X ", Modbus_frame[i]);
+            printf(BOLD_YELLOW "0x%02X ", Modbus_frame[i]);
         }
         printf("\n");
         close(socket_desc);
 		return 1;
 	}
 	else
-		printf("Connected to the server at address (%s) port (%d)...\n", server_ip, port); 	
+		printf(BOLD_GREEN "Connected to the server at address (%s) port (%d)...\n" RESET, server_ip, port); 	
 	
-	
+	int out = write(socket_desc , Modbus_frame , length_of_frame);
+    if (out < 0) {
+        printf(BOLD_RED "Sending data to the server failed...\n" RESET);
+        close(socket_desc);
+        return -2;
+    }
+    printf(BOLD_GREEN "Data sent to the server successfully...\n" RESET);
+    // read the response
+    int in = read(socket_desc, Apdu_R, sizeof(Apdu_R));
+    if (in < 0) {
+        printf(BOLD_RED "Reading response from the server failed...\n" RESET);
+        close(socket_desc);
+        return -3;
+    }
+    printf(BOLD_GREEN "Response received from the server successfully...\n" RESET);
 
-    // sends the request to the slave
-    // waits for the response
-    // returns: number of bytes in the response - ok <0 -error
+    // delete MBAP from the response
+    // shifting the response to remove MBAP
+    for (int i = 0; i < in - 7; i++) {
+        Apdu_R[i] = Apdu_R[i + 7];
+    }
+
     close(socket_desc);
-    return 0;
+    return in - 7; // return length of the apdu response
 }
-/*
-int socket (int domain, int type, int protocol) {
-    // Create a socket
-    // domain: pf_inet for IPv4
-    // type: channel properties - in practice SOCK_STREAM for TCP, SOCK_DGRAM for UDP
-    // protocol: which protocol - in practice 0 = IPPROTO_TCP
-
-    // returns a socket local identifier or -1 for error
-    return 0; // Placeholder return value
-}
-int bind (int sockfd, const struct sockaddr *my_addr, socklen_t addrlen) {
-    
-    // Bind a socket to an address
-    // sockfd: socket file descriptor ( returned by socket() )
-    // addr: pointer to sockaddr structure with the address to bind to
-    // addrlen: length of the address structure
-
-    // returns 0 on success, -1 on error
-    // mentarory in the server side optional in the client
-
-    return 0; // Placeholder return value
-}
-*/
-
-
 
 int main() {
 
@@ -188,6 +233,7 @@ int main() {
     int frame_length = sizeof(modbus_frame); // Example length of ModBus frame
     int buffer[100]; // Buffer for register values
     int numRegisters = 0;
+    int startingRegister = 0;
     
       // Function code goes at byte
     printf("Hello, you are going to connect to %s\n", server_ip);
@@ -196,33 +242,63 @@ int main() {
     printf("Input what kind of function you want to use (1-2): ");
     scanf("%d", &function_code);
     printf("Function code: %d\n", function_code);
+    
     switch(function_code) {
-        case 1:
+        case 1:{
             printf("You chose to read holding registers (Function code 3)\n");
-            // Call the function to read holding registers
-            // Read_holding_registers();
-            break;
-        case 2:
+            
+            printf("Starting register address is set to %d\n", startingRegister);
+            printf("Input starting register address: ");
+            scanf("%d", &startingRegister);
             printf("You chose to write multiple registers (Function code 16)\n");
             printf("Input number of registers to write: ");
             scanf("%d", &numRegisters);
-            int startingRegister = 0; // Starting register address
-             // Number of registers to read/write
+            for (int i = 0; i < numRegisters; i++) {
+                printf("Input value for register %d: ", i + startingRegister);
+                scanf("%d", &buffer[i]);
+            }
             
+            int result = Read_holding_registers(server_ip, MODBUS_PORT, startingRegister, numRegisters, buffer);
+
+            if (result == numRegisters) {
+                printf(BOLD_GREEN "Successfully read %d registers starting from address %d\n" RESET, numRegisters, startingRegister);
+                for (int i = 0; i < numRegisters; i++) {
+                    printf("Register %d: %d\n", i + startingRegister, buffer[i]);
+                }
+            }
+            if (result == 0) {
+                printf(BOLD_RED "You are stupid\n" RESET);
+            }
+
+            printf(BOLD_YELLOW "Why you are Here?" RESET "\n");
+
+            break;
+        }
+        case 2:{
+            
+            
+            printf("Starting register address is set to %d\n", startingRegister);
+            printf("Input starting register address: ");
+            scanf("%d", &startingRegister);
+            printf("You chose to write multiple registers (Function code 16)\n");
+            printf("Input number of registers to write: ");
+            scanf("%d", &numRegisters);
+
             for (int i = 0; i < numRegisters; i++) {
                 printf("Input value for register %d: ", i + startingRegister);
                 scanf("%d", &buffer[i]);
             }
             int result = Write_multiple_registers(server_ip, MODBUS_PORT, startingRegister, numRegisters, buffer);
             if (result == numRegisters) {
-                printf("Successfully wrote %d registers starting from address %d\n", numRegisters, startingRegister);
+                printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, numRegisters, startingRegister);
             }
             if (result == 0) {
-                printf("You are stupid\n");
+                printf(BOLD_RED "You are stupid\n" RESET);
             }
             // Call the function to write multiple registers
             // Write_multiple_registers();
             break;
+        }
         default:
             printf("Invalid option. Please choose 1 or 2.\n");
             return -1;
