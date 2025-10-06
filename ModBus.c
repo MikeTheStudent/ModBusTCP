@@ -6,11 +6,13 @@
 #include <arpa/inet.h>
 
 
-#define MODBUS_PORT 5502
+#define MODBUS_PORT 502
 #define IN_BUF_LEN 256
 #define SERVER_ADDR "127.0.0.1"
 
 
+int Send_Modbus_request(char *server_ip, int port, uint8_t *apdu, int apdu_len, uint8_t *apdu_response);
+int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values);
 
 
 int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
@@ -76,7 +78,7 @@ void Read_holding_registers() {
 }
 */
 
-void Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
+int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
 
     uint8_t Mbap[7]; // mbap header
     uint8_t Modbus_frame[7 + length_of_apdu]; // complete modbus
@@ -105,12 +107,50 @@ void Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of
     for (int i = 0; i < length_of_apdu; i++) {
         Modbus_frame[7 + i] = Apdu[i];
     }
-    
+
+    // Socket setup and comunication
+    int socket_desc;
+	struct sockaddr_in server;
+	
+	
+	//Create socket
+	socket_desc = socket(PF_INET , SOCK_STREAM , IPPROTO_TCP);
+	if (socket_desc == -1)
+	{
+		printf("Socket creation failed...\n");
+		return -1;
+	}
+	else
+		printf("Socket successfully created...\n");
+
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = inet_addr(server_ip);  // Use parameter instead of SERVER_ADDR
+	server.sin_port = htons(port);
+
+	//Connect to remote server
+	
+	if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
+	{
+		printf("Connection with the server failed...\n"); 
+        printf("Make sure that the server is running and reachable at address (%s) port (%d)\n", server_ip, port);
+
+        for (int i = 0; i < length_of_frame; i++) {
+            printf("0x%02X ", Modbus_frame[i]);
+        }
+        printf("\n");
+        close(socket_desc);
+		return 1;
+	}
+	else
+		printf("Connected to the server at address (%s) port (%d)...\n", server_ip, port); 	
+	
+	
 
     // sends the request to the slave
     // waits for the response
     // returns: number of bytes in the response - ok <0 -error
-
+    close(socket_desc);
+    return 0;
 }
 /*
 int socket (int domain, int type, int protocol) {
@@ -146,9 +186,9 @@ int main() {
     char server_ip[] = SERVER_ADDR; // Example server IP address
     uint8_t modbus_frame[256];
     int frame_length = sizeof(modbus_frame); // Example length of ModBus frame
-    int startingRegister = 0; // Starting register address
-    int numRegisters = 0; // Number of registers to read/write
-    int buffer[numRegisters]; // Buffer for register values
+    int buffer[100]; // Buffer for register values
+    int numRegisters = 0;
+    
       // Function code goes at byte
     printf("Hello, you are going to connect to %s\n", server_ip);
     printf("ModBus TCP Server running on port %d\n", MODBUS_PORT);
@@ -166,6 +206,9 @@ int main() {
             printf("You chose to write multiple registers (Function code 16)\n");
             printf("Input number of registers to write: ");
             scanf("%d", &numRegisters);
+            int startingRegister = 0; // Starting register address
+             // Number of registers to read/write
+            
             for (int i = 0; i < numRegisters; i++) {
                 printf("Input value for register %d: ", i + startingRegister);
                 scanf("%d", &buffer[i]);
