@@ -19,13 +19,16 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     int length_of_apdu = 9 + 2 * numRegisters; // length of the apdu
     uint8_t Apdu[length_of_apdu]; // apdu to be sent
     uint8_t Apdu_R[5];
+
     Apdu[0] = Function_code;
     Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
     Apdu[2] = startingRegister & 0xFF;        // starting address low byte
     Apdu[3] = (numRegisters >> 8) & 0xFF;     // number of registers high byte
     Apdu[4] = numRegisters & 0xFF;            // number of
-    
-    for (int i = 5; i < length_of_apdu; i++) {
+    Apdu[5] = numRegisters * 2;               // byte count
+
+    // filling the values to be written
+    for (int i = 6; i < length_of_apdu; i++) {
         uint8_t High_byte = (values[(i - 5) / 2] >> 8) & 0xFF; // high byte of the value
         uint8_t Low_byte = values[(i - 5) / 2] & 0xFF;         // low byte of the value
         if ((i - 5) % 2 == 0) {
@@ -33,6 +36,26 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
         } else {
             Apdu[i] = Low_byte;
         }
+    }
+
+    int Result = Send_Modbus_request(server_ip, port, Apdu, length_of_apdu, Apdu_R);
+
+    if (Apdu_R[0] = Function_code) {
+        if (Apdu_R[1] == Apdu[1] && Apdu_R[2] == Apdu[2]) {
+            if (Apdu_R[3] == Apdu[3] && Apdu_R[4] == Apdu[4]) {
+                // all good
+                return numRegisters; // number of registers written
+            } else {
+                // error in number of registers
+                return -3; // error in number of registers
+            }
+        } else {
+            // error in starting address
+            return -2; // error in starting address
+        }
+    } else {
+        // error in function code
+        return -1; // error in function code
     }
     // TODO response form the server and understand what is going on with consistency of parameters
     // check consistency of parameters
@@ -51,12 +74,45 @@ void Read_holding_registers() {
     // returns: number of read registers - ok <0 -error
 
 }
-void Send_Modbus_request() {
+*/
+
+void Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
+
+    uint8_t Mbap[7]; // mbap header
+    uint8_t Modbus_frame[7 + length_of_apdu]; // complete modbus
+    int length_of_frame = 7 + length_of_apdu; // length of the complete modbus frame
+
+    static uint16_t transaction_id = 0; // transaction id
+    uint16_t protocol_id = 0; // protocol id
+    uint16_t length = htons(length_of_apdu + 1); // length of the remaining bytes (unit id + apdu)
+    uint8_t unit_id = 1; // unit id
+
+    // filling the mbap header
+    Mbap[0] = (transaction_id >> 8) & 0xFF; // transaction id high byte
+    Mbap[1] = transaction_id & 0xFF;        // transaction id
+    Mbap[2] = (protocol_id >> 8) & 0xFF;    // protocol id high byte
+    Mbap[3] = protocol_id & 0xFF;           // protocol id
+    Mbap[4] = (length >> 8) & 0xFF;         // length high byte
+    Mbap[5] = length & 0xFF;                // length low byte
+    Mbap[6] = unit_id;                      // unit id
+    transaction_id++;                       // increment transaction id for next request
+    // filling the complete modbus frame
+    for (int i = 0; i < 7; i++) {
+        Modbus_frame[i] = Mbap[i];
+    }
+
+    // filling the APDU
+    for (int i = 0; i < length_of_apdu; i++) {
+        Modbus_frame[7 + i] = Apdu[i];
+    }
+    
+
     // sends the request to the slave
     // waits for the response
     // returns: number of bytes in the response - ok <0 -error
 
 }
+/*
 int socket (int domain, int type, int protocol) {
     // Create a socket
     // domain: pf_inet for IPv4
