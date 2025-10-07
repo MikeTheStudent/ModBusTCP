@@ -36,7 +36,7 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     uint8_t Function_code = 0x10;
     int length_of_apdu = 6 + 2 * numRegisters; // length of the apdu
     uint8_t Apdu[length_of_apdu]; // apdu to be sent
-    uint8_t Apdu_R[256]; // Large buffer for MBAP + APDU response
+    uint8_t Apdu_R[5+2];
 
     Apdu[0] = Function_code;
     Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
@@ -175,6 +175,8 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
         Modbus_frame[i] = Mbap[i];
     }
 
+    printf("Length of APDU_R: %ld\n", sizeof(Apdu_R));
+
     // filling the APDU
     for (int i = 0; i < length_of_apdu; i++) {
         Modbus_frame[7 + i] = Apdu[i];
@@ -229,15 +231,20 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     
     // Debug: Print the sent frame
     printf(BLUE "Sent frame (%d bytes): ", length_of_frame);
+
     for (int i = 0; i < length_of_frame; i++) {
         printf("0x%02X ", Modbus_frame[i]);
     }
+
     printf("\n" RESET);
 
     int in = read(socket_desc, Apdu_R, sizeof(Apdu_R));
+
     Time_start = time(NULL);
-    while (in <= 0 && (time(NULL) - Time_start) < 5) {
+
+    while (in <= sizeof(Apdu_R) && (time(NULL) - Time_start) < 5) {
         in = read(socket_desc, Apdu_R, sizeof(Apdu_R));
+        printf(BLUE " %d" RESET, in);
     }
     if (in < 0) {
         printf(BOLD_RED "Reading response from the server failed...\n" RESET);
