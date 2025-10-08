@@ -36,7 +36,7 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     uint8_t Function_code = 0x10;
     int length_of_apdu = 6 + 2 * numRegisters; // length of the apdu
     uint8_t Apdu[length_of_apdu]; // apdu to be sent
-    uint8_t Apdu_R[5+2];
+    uint8_t Apdu_R[5+7]; // 5 bytes for response  i think plus 7 for MBAP
 
     Apdu[0] = Function_code;
     Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
@@ -57,34 +57,21 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
         printf(BOLD_RED "Error in sending ModBus request: %d\n" RESET, Result);
         return Result;
     }
-
-    // Check for ModBus error response (function code + 0x80)
-    if (Apdu_R[0] == (Function_code + 0x80)) {
-        printf(BOLD_RED "ModBus error response: Function 0x%02X, Error code 0x%02X\n" RESET, 
-               Apdu_R[0], Apdu_R[1]);
-        return -1;
-    }
-
-    if (Apdu_R[0] == Function_code) {
-        if (Apdu_R[1] == Apdu[1] && Apdu_R[2] == Apdu[2]) {
-            if (Apdu_R[3] == Apdu[3] && Apdu_R[4] == Apdu[4]) {
-                // all good
-                return numRegisters; // number of registers written
+    if (Result == 5){
+        printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
+        if (Apdu_R[0] == Function_code){
+            uint16_t resp_starting_address = (Apdu_R[1] << 8) | Apdu_R[2];
+            uint16_t resp_num_registers = (Apdu_R[3] << 8) | Apdu_R[4];
+            if (resp_starting_address == startingRegister && resp_num_registers == numRegisters){
+                printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, resp_num_registers, resp_starting_address);
+                return resp_num_registers; // number of registers written
             } else {
-                // error in number of registers
-                printf(BOLD_RED "Error in number of registers in response\n" RESET);
-                return -3; // error in number of registers
+                printf(BOLD_RED "Error in response: starting address or number of registers do not match\n" RESET);
+                printf(BOLD_RED "Expected starting address: %d, got: %d\n" RESET, startingRegister, resp_starting_address);
+                printf(BOLD_RED "Expected number of registers: %d, got: %d\n" RESET, numRegisters, resp_num_registers);
+                return -1; // error in response
             }
-        } else {
-            // error in starting address
-            printf(BOLD_RED "Error in starting address in response\n" RESET);
-            return -2; // error in starting address
         }
-    } else {
-        // error in function code
-        printf(BOLD_RED "Error in function code in response: expected 0x%02X, got 0x%02X\n" RESET, 
-               Function_code, Apdu_R[0]);
-        return -1; // error in function code
     }
     // TODO response form the server and understand what is going on with consistency of parameters
     // check consistency of parameters
@@ -122,28 +109,10 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
     }
 
     // checks the response (apdu_R or error_code)
-    if (Apdu_R[0] == Function_code) {
-        if (Apdu_R[1] == Apdu[1] && Apdu_R[2] == Apdu[2]) {
-            if (Apdu_R[3] == Apdu[3] && Apdu_R[4] == Apdu[4]) {
-                // all good
-                for (int i = 0; i < numRegisters; i++) {
-                    values[i] = (Apdu_R[5 + 2 * i] << 8) | Apdu_R[6 + 2 * i];
-                }
-                return numRegisters; // number of registers read
-            } else {
-                // error in number of registers
-                printf(BOLD_RED "Error in number of registers in response\n" RESET);
-                return -3; // error in number of registers
-            }
-        } else {
-            // error in starting address
-            printf(BOLD_RED "Error in starting address in response\n" RESET);
-            return -2; // error in starting address
+    if (Result == sizeof(Apdu_R)){
+        if (Apdu_R[0] == Function_code){
+            printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
         }
-    } else {
-        // error in function code
-        printf(BOLD_RED "Error in function code in response\n" RESET);
-        return -1; // error in function code
     }
     return 0;
 
@@ -175,8 +144,6 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
         Modbus_frame[i] = Mbap[i];
     }
 
-    printf("Length of APDU_R: %ld\n", sizeof(Apdu_R));
-
     // filling the APDU
     for (int i = 0; i < length_of_apdu; i++) {
         Modbus_frame[7 + i] = Apdu[i];
@@ -185,7 +152,6 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     // Socket setup and comunication
     int socket_desc;
 	struct sockaddr_in server;
-	
 	
 	//Create socket
 	socket_desc = socket(PF_INET , SOCK_STREAM , IPPROTO_TCP);
@@ -240,32 +206,49 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 
     int in = read(socket_desc, Apdu_R, sizeof(Apdu_R));
 
+    //TODO Past this point everything is to be fixed
+    
     Time_start = time(NULL);
 
-    while (in <= sizeof(Apdu_R) && (time(NULL) - Time_start) < 5) {
-        in = read(socket_desc, Apdu_R, sizeof(Apdu_R));
-        printf(BLUE " %d" RESET, in);
+    while ((time(NULL) - Time_start) < 5) {
+        in += read(socket_desc, Apdu_R, sizeof(Apdu_R));
     }
+    /* This part is good in idea but does not work as intended
     if (in < 0) {
         printf(BOLD_RED "Reading response from the server failed...\n" RESET);
         close(socket_desc);
         return -3;
     }
-    for (int i = 0; i < in; i++) {
-        printf(BOLD_YELLOW "0x%02X ", Apdu_R[i]);
+   else if (in < sizeof(Apdu_R)) {
+        printf(BOLD_RED "Incomplete response from the server: expected %ld bytes, got %d bytes\n" RESET, sizeof(Apdu_R), in);
+        close(socket_desc);
+        return -4;
+    }
+    else if (in == sizeof(Apdu_R)) {
+        printf(BOLD_YELLOW "Full response received (%d bytes): ", in);
+        // strip MBAP header and return APBD
+        for (int i =0; i<in; i++){
+            printf("0x%02X ", Apdu_R[i]);k
+        }
     }
     printf("\n");
+    */
     printf(BOLD_GREEN "Response received from the server successfully...\n" RESET);
-
+    printf(BOLD_YELLOW "MBAP Header\n" RESET);
+    for (int i = 0; i < 7; i++) {
+        printf(BLUE "0x%02X ", Apdu_R[i]);
+    }
+    printf("\n");
     // delete MBAP from the response
     // shifting the response to remove MBAP
+    printf(BOLD_YELLOW "APDU Response\n" RESET);
     for (int i = 0; i < in - 7; i++) {
         Apdu_R[i] = Apdu_R[i + 7];
+        printf(BLUE "0x%02X ", Apdu_R[i]);
     }
-
+    printf("\n");
     close(socket_desc);
     printf(BOLD_GREEN "Connection closed...\n" RESET);
-    printf(BLUE "in: %d\n", in);
     return in - 7; // return length of the apdu response
 }
 
@@ -328,6 +311,8 @@ int main() {
             printf("You chose to write multiple registers (Function code 16)\n");
             printf("Input number of registers to write: ");
             scanf("%d", &numRegisters);
+
+            
 
             for (int i = 0; i < numRegisters; i++) {
                 printf("Input value for register %d: ", i + startingRegister);
