@@ -84,16 +84,12 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
             }
         }
     }
-    else if (Result == 2){
-        if (Apdu_R[0] == (Function_code + 0x80)){
-            uint8_t exception_code = Apdu_R[1];
-            printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
-            return -exception_code; // return negative exception code
-        } else {
-            printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
-            return -1; // error in response
-        }
-    }
+    // TODO response form the server and understand what is going on with consistency of parameters
+    // check consistency of parameters
+    // assembles APDU
+    
+    // checks the response (apdu_R or error_code)
+    // returns: number of writtend registers - ok <0 -error
     return 0;
 }
 
