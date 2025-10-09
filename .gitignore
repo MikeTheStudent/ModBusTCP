@@ -1,27 +1,20 @@
-# Ignore everything
-*
-
-# But not C source files
-!*.c
-
-# But not C header files
-!*.h
-
-# Don't ignore .gitignore itself
-!.gitignore
-
-# Ignore compiled executables specifically
+# Compiled executables
 *.exe
 *.out
 *.o
 *.obj
+ModBus
 
-# Ignore IDE/editor files
+# IDE/editor files
 .vscode/
 *.swp
 *.swo
 *~
 
-# Ignore OS files
+# OS files
 .DS_Store
 Thumbs.db
+
+# Build artifacts
+build/
+dist/
