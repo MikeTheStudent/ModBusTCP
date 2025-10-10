@@ -16,8 +16,8 @@ int main() {
     int buffer[100]; // Buffer for register values
     int numRegisters = 0;
     int startingRegister = 0;
-    
-    while (1) { // Function code goes at byte
+
+    while (function_code < 4) { // Function code goes at byte
 
         printf("Hello, you are going to connect to %s\n", server_ip);
         printf("ModBus TCP Server running on port %d\n", MODBUS_PORT);
@@ -40,7 +40,7 @@ int main() {
                 
                 int result = Read_holding_registers(server_ip, MODBUS_PORT, startingRegister, numRegisters, buffer);
 
-                if (result == 0) {
+                if (result == 0 || result == numRegisters) {
                     printf(BOLD_GREEN "Successfully read %d registers starting from address %d\n" RESET, numRegisters, startingRegister);
                 } else if (result == -1){
                     printf(BOLD_RED "Error occurred\n" RESET);
@@ -67,10 +67,10 @@ int main() {
                 }
                 int result = Write_multiple_registers(server_ip, MODBUS_PORT, startingRegister, numRegisters, buffer);
 
-                if (result == numRegisters) {
+                if (result == numRegisters || result == 0) {
                     printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, numRegisters, startingRegister);
                 }
-                if (result == 0) {
+                if (result == -1) {
                     printf(BOLD_RED "You are stupid\n" RESET);
                 }
                 // Call the function to write multiple registers

@@ -22,7 +22,7 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     uint8_t Apdu_R[5+7]; // 5 bytes for response  i think plus 7 for MBAP
 
     //Server registers start form 0
-    //startingRegister = startingRegister - 1; // ModBus addresses start from 0
+    startingRegister = startingRegister - 1; // ModBus addresses start from 0
 
     Apdu[0] = Function_code;
     Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
@@ -102,7 +102,7 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
     uint8_t Apdu_R[2 + 2 * numRegisters];
     int length_of_response = sizeof(Apdu_R);
 
-    //startingRegister = startingRegister - 1; // ModBus addresses start from 0
+    startingRegister = startingRegister - 1; // ModBus addresses start from 0
 
     Apdu[0] = Function_code;
     Apdu[1] = (startingRegister >> 8) & 0xFF; // starting address high byte
@@ -122,6 +122,7 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
             values[i] = (Apdu_R[2*i + 2] << 8) | Apdu_R[2*i + 3];
             printf("Register %d: %d\n", register_number, values[i]);
          } // combine high and low byte
+         return numRegisters; // number of registers read
     } else if (Apdu_R[0] == (Function_code + 0x80)){
             uint8_t exception_code = Apdu_R[1];
             printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);

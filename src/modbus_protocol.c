@@ -24,6 +24,8 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     uint16_t length = length_of_apdu + 1; // length of the remaining bytes (unit id + apdu)
     uint8_t unit_id = 1; // unit id
 
+    uint8_t Mbap_R[7];
+
     printf(YELLOW "Transaction ID: %d\n" RESET, transaction_id);
 
 
@@ -37,6 +39,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     Mbap[6] = unit_id;                      // unit id
     transaction_id++;                       // increment transaction id for next request
     // filling the complete modbus frame
+    
     for (int i = 0; i < 7; i++) {
         Modbus_frame[i] = Mbap[i];
     }
@@ -45,7 +48,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     for (int i = 0; i < length_of_apdu; i++) {
         Modbus_frame[7 + i] = Apdu[i];
     }
-
+    
     // Socket setup and comunication
     int socket_desc;
 	struct sockaddr_in server;
@@ -71,11 +74,12 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 	{
 		printf(BOLD_RED "Connection with the server failed: %s\n" RESET, strerror(errno)); 
         printf("Make sure that the server is running and reachable at address ("BLUE "%s" RESET ") port ("BLUE "%d" RESET ")\n", server_ip, port);
-
+        
         for (int i = 0; i < length_of_frame; i++) {
             printf(BOLD_YELLOW "0x%02X ", Modbus_frame[i]);
         }
         printf("\n");
+        
         close(socket_desc);
 		return 1;
 	}
@@ -83,6 +87,8 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 		printf(BOLD_GREEN "Connected to the server at address (%s) port (%d)...\n" RESET, server_ip, port); 	
 	
 	int out = write(socket_desc , Modbus_frame , length_of_frame);
+    
+
 
     if (out < 0) {
         printf(BOLD_RED "Sending data to the server failed...\n" RESET);
@@ -93,14 +99,16 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     
     // Debug: Print the sent frame
     printf(BLUE "Sent frame (%d bytes): ", length_of_frame);
-
+    
     for (int i = 0; i < length_of_frame; i++) {
         printf("0x%02X ", Modbus_frame[i]);
     }
-
     printf("\n" RESET);
+    
 
-    uint8_t Mbap_R[7]; // mbap header for response
+    
+
+     // mbap header for response
 
     //int in = recv(socket_desc, Mbap_R, sizeof(Mbap_R), 0);
     int HearedIN = read(socket_desc, Mbap_R, 7);
