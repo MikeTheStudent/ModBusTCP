@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 
 int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
@@ -18,8 +19,8 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
 
     uint8_t Function_code = 0x10;
     int length_of_apdu = 6 + 2 * numRegisters; // length of the apdu
-    uint8_t Apdu[length_of_apdu]; // apdu to be sent
-    uint8_t Apdu_R[5+7]; // 5 bytes for response  i think plus 7 for MBAP
+    uint8_t *Apdu = malloc(length_of_apdu); // apdu to be sent THIS SHOULD BE MALLOC2
+    uint8_t *Apdu_R = malloc(5 + 7); // 5 bytes for response  i think plus 7 for MBAP
 
     //Server registers start form 0
     startingRegister = startingRegister - 1; // ModBus addresses start from 0
@@ -41,6 +42,8 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
 
     if (Result < 0) {
         printf(BOLD_RED "Error in sending ModBus request: %d\n" RESET, Result);
+        free(Apdu);
+        free(Apdu_R);
         return Result;
     }
     if (Result == 5){
@@ -50,11 +53,16 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
             uint16_t resp_num_registers = (Apdu_R[3] << 8) | Apdu_R[4];
             if (resp_starting_address == startingRegister && resp_num_registers == numRegisters){
                 printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, resp_num_registers, resp_starting_address);
+
+                free(Apdu);
+                free(Apdu_R);
                 return resp_num_registers; // number of registers written
             } else {
                 printf(BOLD_RED "Error in response: starting address or number of registers do not match\n" RESET);
                 printf(BOLD_RED "Expected starting address: %d, got: %d\n" RESET, startingRegister, resp_starting_address);
                 printf(BOLD_RED "Expected number of registers: %d, got: %d\n" RESET, numRegisters, resp_num_registers);
+                free(Apdu);
+                free(Apdu_R);
                 return -1; // error in response
             }
         }
@@ -79,11 +87,21 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
                 default:
                     printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
+            free(Apdu);
+            free(Apdu_R);
             return -1; // return negative exception code
         } else {
             printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
+            free(Apdu);
+            free(Apdu_R);
             return -1; // error in response
         }
+    }
+    else {
+        printf(BOLD_RED "Error in response: unexpected number of bytes received: %d\n" RESET, Result);
+        free(Apdu);
+        free(Apdu_R);
+        return -1; // error in response
     }
     return 0;
 }
@@ -98,9 +116,10 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
     // assembles APDU
     uint8_t Function_code = 0x03;
     int length_of_apdu = 5;
-    uint8_t Apdu[length_of_apdu];
-    uint8_t Apdu_R[2 + 2 * numRegisters];
-    int length_of_response = sizeof(Apdu_R);
+    int length_of_response = 2 + 2 * numRegisters; // function code + byte count + 2 bytes per register
+    uint8_t *Apdu = malloc(length_of_apdu);
+    uint8_t *Apdu_R = malloc(length_of_response);
+    
 
     startingRegister = startingRegister - 1; // ModBus addresses start from 0
 
@@ -122,7 +141,9 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
             values[i] = (Apdu_R[2*i + 2] << 8) | Apdu_R[2*i + 3];
             printf("Register %d: %d\n", register_number, values[i]);
          } // combine high and low byte
-         return numRegisters; // number of registers read
+        free(Apdu);
+        free(Apdu_R);
+        return numRegisters; // number of registers read
     } else if (Apdu_R[0] == (Function_code + 0x80)){
             uint8_t exception_code = Apdu_R[1];
             printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
@@ -142,12 +163,17 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
                 default:
                     printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
+            free(Apdu);
+            free(Apdu_R);
             return -1; // return negative exception code
     } else {
             printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
+            free(Apdu);
+            free(Apdu_R);
             return -1; // error in response
         }
-    
+    free(Apdu);
+    free(Apdu_R);
     return 0;
 
 }

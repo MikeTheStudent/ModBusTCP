@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -16,7 +17,7 @@
 int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
 
     uint8_t Mbap[7]; // mbap header
-    uint8_t Modbus_frame[7 + length_of_apdu]; // complete modbus
+    uint8_t *Modbus_frame = malloc(7 + length_of_apdu); // complete modbus
     int length_of_frame = 7 + length_of_apdu; // length of the complete modbus frame
 
     static uint16_t transaction_id = 0; // transaction id
@@ -60,6 +61,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 	if (socket_desc == -1)
 	{
 		printf(BOLD_RED "Socket creation failed...\n" RESET);
+        free(Modbus_frame);
 		return -1;
 	}
 	else
@@ -81,6 +83,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
         printf("\n");
         
         close(socket_desc);
+        free(Modbus_frame);
 		return 1;
 	}
 	else
@@ -93,6 +96,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     if (out < 0) {
         printf(BOLD_RED "Sending data to the server failed...\n" RESET);
         close(socket_desc);
+        free(Modbus_frame);
         return -2;
     }
     printf(BOLD_GREEN "Data sent to the server successfully...\n" RESET);
@@ -116,11 +120,13 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     if (HearedIN < 0) {
         printf(BOLD_RED "Receiving data from the server failed...\n" RESET);
         close(socket_desc);
+        free(Modbus_frame);
         return -3;
     }
     if (Mbap_R[0] != Mbap[0] || Mbap_R[1] != Mbap[1]) {
         printf(BOLD_RED "Transaction ID mismatch: sent 0x%02X%02X, received 0x%02X%02X\n" RESET, Mbap[0], Mbap[1], Mbap_R[0], Mbap_R[1]);
         close(socket_desc);
+        free(Modbus_frame);
         return 0; // transaction ID mismatch
     }
     else {
@@ -140,5 +146,6 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     printf("\n");
     close(socket_desc);
     printf(BOLD_GREEN "Connection closed...\n" RESET);
+    free(Modbus_frame);
     return in; // return length of the apdu response
 }
