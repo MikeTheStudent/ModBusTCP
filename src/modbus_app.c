@@ -9,11 +9,11 @@
 int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
     // verify parameters limit of the starting 
     if (numRegisters <= 0 || numRegisters > 123) {
-        printf(BOLD_RED "Invalid number of registers: %d. Must be between 1 and 123.\n" RESET, numRegisters);
+        if (DEBUG) printf(BOLD_RED "Invalid number of registers: %d. Must be between 1 and 123.\n" RESET, numRegisters);
         return -1; // invalid parameters
     }
     else if (startingRegister + numRegisters > 65536) {
-        printf(BOLD_RED "Invalid starting register: %d. Must be between 0 and %d.\n" RESET, startingRegister, 65536 - numRegisters);
+        if (DEBUG) printf(BOLD_RED "Invalid starting register: %d. Must be between 0 and %d.\n" RESET, startingRegister, 65536 - numRegisters);
         return -1; // invalid parameters
     }
 
@@ -41,26 +41,26 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     int Result = Send_Modbus_request(server_ip, port, Apdu, length_of_apdu, Apdu_R);
 
     if (Result < 0) {
-        printf(BOLD_RED "Error in sending ModBus request: %d\n" RESET, Result);
+        if (DEBUG) printf(BOLD_RED "Error in sending ModBus request: %d\n" RESET, Result);
         free(Apdu);
         free(Apdu_R);
         return Result;
     }
     if (Result == 5){
-        printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
+        if (DEBUG) printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
         if (Apdu_R[0] == Function_code){
             uint16_t resp_starting_address = (Apdu_R[1] << 8) | Apdu_R[2];
             uint16_t resp_num_registers = (Apdu_R[3] << 8) | Apdu_R[4];
             if (resp_starting_address == startingRegister && resp_num_registers == numRegisters){
-                printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, resp_num_registers, resp_starting_address);
+                if (DEBUG) printf(BOLD_GREEN "Successfully wrote %d registers starting from address %d\n" RESET, resp_num_registers, resp_starting_address);
 
                 free(Apdu);
                 free(Apdu_R);
                 return resp_num_registers; // number of registers written
             } else {
-                printf(BOLD_RED "Error in response: starting address or number of registers do not match\n" RESET);
-                printf(BOLD_RED "Expected starting address: %d, got: %d\n" RESET, startingRegister, resp_starting_address);
-                printf(BOLD_RED "Expected number of registers: %d, got: %d\n" RESET, numRegisters, resp_num_registers);
+                if (DEBUG) printf(BOLD_RED "Error in response: starting address or number of registers do not match\n" RESET);
+                if (DEBUG) printf(BOLD_RED "Expected starting address: %d, got: %d\n" RESET, startingRegister, resp_starting_address);
+                if (DEBUG) printf(BOLD_RED "Expected number of registers: %d, got: %d\n" RESET, numRegisters, resp_num_registers);
                 free(Apdu);
                 free(Apdu_R);
                 return -1; // error in response
@@ -70,35 +70,46 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
     else if (Result == 2){
         if (Apdu_R[0] == (Function_code + 0x80)){
             uint8_t exception_code = Apdu_R[1];
-            printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
+            if (DEBUG) printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
             switch(exception_code) {
                 case 1:
-                    printf(BOLD_RED "Illegal Function\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Function\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 1;
+
                 case 2:
-                    printf(BOLD_RED "Illegal Data Address\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Data Address\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 2;
+                    
                 case 3:
-                    printf(BOLD_RED "Illegal Data Value\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Data Value\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 3;
+                    
                 case 4:
-                    printf(BOLD_RED "Slave Device Failure\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Slave Device Failure\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 4;
                 default:
-                    printf(BOLD_RED "Unknown Exception Code\n" RESET);
+                    if (DEBUG) printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
             free(Apdu);
             free(Apdu_R);
             return -1; // return negative exception code
         } else {
-            printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
+            if (DEBUG) printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
             free(Apdu);
             free(Apdu_R);
             return -1; // error in response
         }
     }
     else {
-        printf(BOLD_RED "Error in response: unexpected number of bytes received: %d\n" RESET, Result);
+        if (DEBUG) printf(BOLD_RED "Error in response: unexpected number of bytes received: %d\n" RESET, Result);
         free(Apdu);
         free(Apdu_R);
         return -1; // error in response
@@ -109,7 +120,7 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
 int Read_holding_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
     // check consistency of parameters
     if (startingRegister + numRegisters > 65536 || numRegisters <= 0 || numRegisters > 125) {
-        printf(BOLD_RED "Invalid parameters: startingRegister=%d, numRegisters=%d\n" RESET, startingRegister, numRegisters);
+        if (DEBUG) printf(BOLD_RED "Invalid parameters: startingRegister=%d, numRegisters=%d\n" RESET, startingRegister, numRegisters);
         return -1; // invalid parameters
     }
 
@@ -134,40 +145,48 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
     // checks the response (apdu_R or error_code)
     if (Result == length_of_response){
         if (Apdu_R[0] == Apdu[0]){
-            printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
+            if (DEBUG) printf(BOLD_GREEN "Successfully recived correct number of bytes in response: %d\n" RESET, Result);
             }
         for (int i = 0; i < numRegisters; i++) {
             int register_number = i + startingRegister + 1; // Adjust for 1-based addressing in output
             values[i] = (Apdu_R[2*i + 2] << 8) | Apdu_R[2*i + 3];
-            printf("Register %d: %d\n", register_number, values[i]);
+            if (DEBUG) printf("Register %d: %d\n", register_number, values[i]);
          } // combine high and low byte
         free(Apdu);
         free(Apdu_R);
         return numRegisters; // number of registers read
     } else if (Apdu_R[0] == (Function_code + 0x80)){
             uint8_t exception_code = Apdu_R[1];
-            printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
+            if (DEBUG) printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
             switch(exception_code) {
                 case 1:
-                    printf(BOLD_RED "Illegal Function\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Function\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 1;
                 case 2:
-                    printf(BOLD_RED "Illegal Data Address\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Data Address\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 2;
                 case 3:
-                    printf(BOLD_RED "Illegal Data Value\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Illegal Data Value\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 3;
                 case 4:
-                    printf(BOLD_RED "Slave Device Failure\n" RESET);
-                    break;
+                    if (DEBUG) printf(BOLD_RED "Slave Device Failure\n" RESET);
+                    free(Apdu);
+                    free(Apdu_R);
+                    return 4;
                 default:
-                    printf(BOLD_RED "Unknown Exception Code\n" RESET);
+                    if (DEBUG) printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
             free(Apdu);
             free(Apdu_R);
             return -1; // return negative exception code
     } else {
-            printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
+            if (DEBUG) printf(BOLD_RED "Error in response: unexpected function code in exception response\n" RESET);
             free(Apdu);
             free(Apdu_R);
             return -1; // error in response

@@ -27,7 +27,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 
     uint8_t Mbap_R[7];
 
-    printf(YELLOW "Transaction ID: %d\n" RESET, transaction_id);
+    if (DEBUG) printf(YELLOW "Transaction ID: %d\n" RESET, transaction_id);
 
 
     // filling the mbap header
@@ -60,12 +60,12 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     //Check if socket is created
 	if (socket_desc == -1)
 	{
-		printf(BOLD_RED "Socket creation failed...\n" RESET);
+		if (DEBUG) printf(BOLD_RED "Socket creation failed...\n" RESET);
         free(Modbus_frame);
 		return -1;
 	}
 	else
-		printf(BOLD_GREEN "Socket successfully created...\n" RESET);
+		if (DEBUG) printf(BOLD_GREEN "Socket successfully created...\n" RESET);
 
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = inet_addr(server_ip);  // Use parameter instead of SERVER_ADDR
@@ -74,40 +74,44 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
 	//Connect to remote server
 	if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
 	{
-		printf(BOLD_RED "Connection with the server failed: %s\n" RESET, strerror(errno)); 
-        printf("Make sure that the server is running and reachable at address ("BLUE "%s" RESET ") port ("BLUE "%d" RESET ")\n", server_ip, port);
+		if (DEBUG) printf(BOLD_RED "Connection with the server failed: %s\n" RESET, strerror(errno)); 
+        if (DEBUG) printf("Make sure that the server is running and reachable at address ("BLUE "%s" RESET ") port ("BLUE "%d" RESET ")\n", server_ip, port);
         
-        for (int i = 0; i < length_of_frame; i++) {
-            printf(BOLD_YELLOW "0x%02X ", Modbus_frame[i]);
+        if (DEBUG) {
+            for (int i = 0; i < length_of_frame; i++) {
+                printf(BOLD_YELLOW "0x%02X ", Modbus_frame[i]);
+            }
+            printf("\n");
         }
-        printf("\n");
         
         close(socket_desc);
         free(Modbus_frame);
 		return 1;
 	}
 	else
-		printf(BOLD_GREEN "Connected to the server at address (%s) port (%d)...\n" RESET, server_ip, port); 	
+		if (DEBUG) printf(BOLD_GREEN "Connected to the server at address (%s) port (%d)...\n" RESET, server_ip, port); 	
 	
 	int out = write(socket_desc , Modbus_frame , length_of_frame);
     
 
 
     if (out < 0) {
-        printf(BOLD_RED "Sending data to the server failed...\n" RESET);
+        if (DEBUG) printf(BOLD_RED "Sending data to the server failed...\n" RESET);
         close(socket_desc);
         free(Modbus_frame);
         return -2;
     }
-    printf(BOLD_GREEN "Data sent to the server successfully...\n" RESET);
+    if (DEBUG) printf(BOLD_GREEN "Data sent to the server successfully...\n" RESET);
     
     // Debug: Print the sent frame
-    printf(BLUE "Sent frame (%d bytes): ", length_of_frame);
-    
-    for (int i = 0; i < length_of_frame; i++) {
-        printf("0x%02X ", Modbus_frame[i]);
+    if (DEBUG) {
+        printf(BLUE "Sent frame (%d bytes): ", length_of_frame);
+        
+        for (int i = 0; i < length_of_frame; i++) {
+            printf("0x%02X ", Modbus_frame[i]);
+        }
+        printf("\n" RESET);
     }
-    printf("\n" RESET);
     
 
     
@@ -118,13 +122,13 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     int HearedIN = read(socket_desc, Mbap_R, 7);
     int in = 0;
     if (HearedIN < 0) {
-        printf(BOLD_RED "Receiving data from the server failed...\n" RESET);
+        if (DEBUG) printf(BOLD_RED "Receiving data from the server failed...\n" RESET);
         close(socket_desc);
         free(Modbus_frame);
         return -3;
     }
     if (Mbap_R[0] != Mbap[0] || Mbap_R[1] != Mbap[1]) {
-        printf(BOLD_RED "Transaction ID mismatch: sent 0x%02X%02X, received 0x%02X%02X\n" RESET, Mbap[0], Mbap[1], Mbap_R[0], Mbap_R[1]);
+        if (DEBUG) printf(BOLD_RED "Transaction ID mismatch: sent 0x%02X%02X, received 0x%02X%02X\n" RESET, Mbap[0], Mbap[1], Mbap_R[0], Mbap_R[1]);
         close(socket_desc);
         free(Modbus_frame);
         return 0; // transaction ID mismatch
@@ -136,16 +140,18 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     }
     // Transaction id should be the same as sent
 
-    printf(BOLD_GREEN "Response received from the server successfully...\n" RESET);
+    if (DEBUG) printf(BOLD_GREEN "Response received from the server successfully...\n" RESET);
 
-    printf(BOLD_YELLOW "APDU Response\n" RESET);
-    for (int i = 0; i < in; i++) {
-        Apdu_R[i] = Apdu_R[i];
-        printf(BLUE "0x%02X ", Apdu_R[i]);
+    if (DEBUG) {
+        printf(BOLD_YELLOW "APDU Response\n" RESET);
+        for (int i = 0; i < in; i++) {
+            Apdu_R[i] = Apdu_R[i];
+            printf(BLUE "0x%02X ", Apdu_R[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
     close(socket_desc);
-    printf(BOLD_GREEN "Connection closed...\n" RESET);
+    if (DEBUG) printf(BOLD_GREEN "Connection closed...\n" RESET);
     free(Modbus_frame);
     return in; // return length of the apdu response
 }

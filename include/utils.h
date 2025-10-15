@@ -16,4 +16,7 @@
 #define BOLD_GREEN  "\033[1;32m"
 #define BOLD_YELLOW "\033[1;33m"
 
+// External DEBUG variable declaration
+extern int DEBUG;
+
 #endif
