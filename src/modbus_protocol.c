@@ -7,12 +7,43 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+
+// Helper function to read from socket with timeout
+int read_with_timeout(int socket_desc, uint8_t *buffer, int bytes_to_read, int timeout_seconds) {
+    fd_set read_fds;
+    struct timeval timeout;
+    
+    // Set up file descriptor set
+    FD_ZERO(&read_fds);
+    FD_SET(socket_desc, &read_fds);
+    
+    // Set timeout
+    timeout.tv_sec = timeout_seconds;
+    timeout.tv_usec = 0;
+    
+    // Wait for data or timeout
+    int select_result = select(socket_desc + 1, &read_fds, NULL, NULL, &timeout);
+    
+    if (select_result > 0 && FD_ISSET(socket_desc, &read_fds)) {
+        // Data is ready, now read it
+        return read(socket_desc, buffer, bytes_to_read);
+    } else if (select_result == 0) {
+        // Timeout
+        if (DEBUG) printf(BOLD_RED "Timeout: No data received within %d seconds\n" RESET, timeout_seconds);
+        return -1; // Timeout error
+    } else {
+        // select() error
+        if (DEBUG) printf(BOLD_RED "select() error: %s\n" RESET, strerror(errno));
+        return -1; // Select error
+    }
+}
 
 int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_apdu, uint8_t *Apdu_R) {
 
@@ -86,7 +117,7 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
         
         close(socket_desc);
         free(Modbus_frame);
-		return 1;
+		return -1;
 	}
 	else
 		if (DEBUG) printf(BOLD_GREEN "Connected to the server at address (%s) port (%d)...\n" RESET, server_ip, port); 	
@@ -119,10 +150,10 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
      // mbap header for response
 
     //int in = recv(socket_desc, Mbap_R, sizeof(Mbap_R), 0);
-    int HearedIN = read(socket_desc, Mbap_R, 7);
+    int HearedIN = read_with_timeout(socket_desc, Mbap_R, 7, 5); // 5 second timeout
     int in = 0;
     if (HearedIN < 0) {
-        if (DEBUG) printf(BOLD_RED "Receiving data from the server failed...\n" RESET);
+        if (DEBUG) printf(BOLD_RED "Failed to receive MBAP header from server (timeout or error)\n" RESET);
         close(socket_desc);
         free(Modbus_frame);
         return -3;
@@ -136,7 +167,14 @@ int Send_Modbus_request(char *server_ip, int port, uint8_t *Apdu, int length_of_
     else {
         uint16_t waiting_bytes = (Mbap_R[4] << 8) | Mbap_R[5];
         waiting_bytes -= 1; // subtract unit id byte
-        in = read(socket_desc, Apdu_R, waiting_bytes);
+        in = read_with_timeout(socket_desc, Apdu_R, waiting_bytes, 5); // 5 second timeout
+        
+        if (in < 0) {
+            if (DEBUG) printf(BOLD_RED "Failed to receive APDU data from server (timeout or error)\n" RESET);
+            close(socket_desc);
+            free(Modbus_frame);
+            return -4; // APDU timeout/error
+        }
     }
     // Transaction id should be the same as sent
 

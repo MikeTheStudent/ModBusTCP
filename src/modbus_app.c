@@ -9,11 +9,11 @@
 int Write_multiple_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
     // verify parameters limit of the starting 
     if (numRegisters <= 0 || numRegisters > 123) {
-        if (DEBUG) printf(BOLD_RED "Invalid number of registers: %d. Must be between 1 and 123.\n" RESET, numRegisters);
+        printf(BOLD_RED "Invalid number of registers: %d. Must be between 1 and 123.\n" RESET, numRegisters);
         return -1; // invalid parameters
     }
     else if (startingRegister + numRegisters > 65536) {
-        if (DEBUG) printf(BOLD_RED "Invalid starting register: %d. Must be between 0 and %d.\n" RESET, startingRegister, 65536 - numRegisters);
+        printf(BOLD_RED "Invalid starting register: %d. Must be between 0 and %d.\n" RESET, startingRegister, 65536 - numRegisters);
         return -1; // invalid parameters
     }
 
@@ -73,28 +73,28 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
             if (DEBUG) printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
             switch(exception_code) {
                 case 1:
-                    if (DEBUG) printf(BOLD_RED "Illegal Function\n" RESET);
+                    printf(BOLD_RED "Illegal Function\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 1;
+                    return -2;
 
                 case 2:
-                    if (DEBUG) printf(BOLD_RED "Illegal Data Address\n" RESET);
+                    printf(BOLD_RED "Illegal Data Address\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 2;
+                    return -3;
                     
                 case 3:
-                    if (DEBUG) printf(BOLD_RED "Illegal Data Value\n" RESET);
+                    printf(BOLD_RED "Illegal Data Value\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 3;
+                    return -4;
                     
                 case 4:
-                    if (DEBUG) printf(BOLD_RED "Slave Device Failure\n" RESET);
+                    printf(BOLD_RED "Slave Device Failure\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 4;
+                    return -5;
                 default:
                     if (DEBUG) printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
@@ -120,7 +120,7 @@ int Write_multiple_registers(char *server_ip, int port, int startingRegister, in
 int Read_holding_registers(char *server_ip, int port, int startingRegister, int numRegisters, int *values) {
     // check consistency of parameters
     if (startingRegister + numRegisters > 65536 || numRegisters <= 0 || numRegisters > 125) {
-        if (DEBUG) printf(BOLD_RED "Invalid parameters: startingRegister=%d, numRegisters=%d\n" RESET, startingRegister, numRegisters);
+        printf(BOLD_RED "Invalid parameters: startingRegister=%d, numRegisters=%d\n" RESET, startingRegister, numRegisters);
         return -1; // invalid parameters
     }
 
@@ -160,25 +160,25 @@ int Read_holding_registers(char *server_ip, int port, int startingRegister, int 
             if (DEBUG) printf(BOLD_RED "ModBus Exception response received. Exception code: %d\n" RESET, exception_code);
             switch(exception_code) {
                 case 1:
-                    if (DEBUG) printf(BOLD_RED "Illegal Function\n" RESET);
+                    printf(BOLD_RED "Illegal Function\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 1;
+                    return -2;
                 case 2:
-                    if (DEBUG) printf(BOLD_RED "Illegal Data Address\n" RESET);
+                    printf(BOLD_RED "Illegal Data Address\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 2;
+                    return -3;
                 case 3:
-                    if (DEBUG) printf(BOLD_RED "Illegal Data Value\n" RESET);
+                    printf(BOLD_RED "Illegal Data Value\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 3;
+                    return -4;
                 case 4:
-                    if (DEBUG) printf(BOLD_RED "Slave Device Failure\n" RESET);
+                    printf(BOLD_RED "Slave Device Failure\n" RESET);
                     free(Apdu);
                     free(Apdu_R);
-                    return 4;
+                    return -5;
                 default:
                     if (DEBUG) printf(BOLD_RED "Unknown Exception Code\n" RESET);
             }
